@@ -1,0 +1,95 @@
+#Lauch Basic EC2 instance in mumbai region.
+
+- name: Ansible Play
+  hosts: localhost
+  connection: local
+  become: False
+  tasks:
+    - name:   launching AWS instance using Ansible
+      amazon.aws.ec2_instance:
+        key_name: "Your key in ec2 dashboard"
+        region: {{aws_region}}
+        instance_type: t2.micro
+        image_id: {{AMI ID}}
+        network:
+           assign_public_ip: true
+        tags:
+          Name: Demo_server
+      register: ec2_instance
+      
+      
+      
+    - name: Configure security group for SSH access
+      amazon.aws.ec2_security_group:
+        name: "{{ ec2_instance.instances[0].instance_id }}_ssh"
+        description: Allow SSH traffic
+        vpc_id: vpc-007d6e88bc6e5b422
+        region: ap-south-1
+        rules:
+          - proto: tcp
+            from_port: 22
+            to_port: 22
+            cidr_ip: 0.0.0.0/0
+        state: present
+      register: config_output
+    - debug:
+        msg: "{{ config_output }}"
+
+    - name: Update security group of the EC2 instance
+      amazon.aws.ec2_instance:
+        instance_ids: "{{ ec2_instance.instances[0].instance_id }}"
+        security_groups: "{{ config_output.group_id }}"
+        region: ap-south-1
+        state: present
+
+#Stop the Instances
+
+    - name: Stop instances that were previously launched
+      amazon.aws.ec2_instance:
+        state: stopped
+        region: ap-south-1
+        tags:
+           Name: Daemo_server
+
+#Start the Instances 
+    - name: Start instances that were previously Stoped
+      amazon.aws.ec2_instance:
+        state: running
+        region: ap-south-1
+        tags:
+           Name: Daemo_server
+
+#Terminate the Instances
+    - name: Terminate instances that were previously created
+      amazon.aws.ec2_instance:
+        state: absent
+        region: ap-south-1
+        instance_ids: i-0ba6a0603d368f193
+		
+			 		
+		
+---
+- name: Check EC2 Instance State
+  hosts: localhost
+  gather_facts: false
+  #vars:
+   # aws_access_key: "your_aws_access_key"
+   # aws_secret_key: "your_aws_secret_key"
+   # aws_region: "your_aws_region"
+   # instance_ids:
+      - "your_instance_id"
+
+  tasks:
+    - name: Get EC2 Instance Facts
+      amazon.aws.ec2_instance_info:
+        #aws_access_key: "{{ aws_access_key }}"
+        #aws_secret_key: "{{ aws_secret_key }}"
+        region: "{{ aws_region }}"
+        #instance_ids: "{{ instance_ids }}"
+      register: ec2_instance_info
+
+    - name: Display EC2 Instance State
+      debug:
+        msg: "Instance ID: {{ item.instance_id}},State: {{ item.state.name}},Name: {{item.tags.name}}"
+		  with_items: "{{ ec2_instance_info.instances}}"
+    
